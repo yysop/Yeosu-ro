@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { places as defaultPlaces, Place, Category, FoodCategory } from './data/places';
 
@@ -15,6 +15,8 @@ const YEOSU_CENTER: [number, number] = [34.7700, 127.7200];
 const YEOSU_DEFAULT_ZOOM = 10;
 const KOREA_OVERVIEW_CENTER: [number, number] = [36.25, 127.85];
 const KOREA_OVERVIEW_ZOOM = 7;
+const FOCUS_ZOOM = 16;
+const NEON_COLOR = '#39ff14';
 const YEOSU_BOUNDS: L.LatLngBoundsExpression = [[34.45, 127.30], [35.10, 128.20]];
 const FOOD_CATEGORIES: FoodCategory[] = ['한식', '일식', '양식', '중식', '회·해산물', '카페', '디저트'];
 const FOOD_MARKER_COLORS: Record<FoodCategory, string> = {
@@ -78,11 +80,36 @@ function createPinIcon() {
 }
 
 /* ---------- map helpers ---------- */
+/** 모든 장소를 같은 배율(FOCUS_ZOOM)로 비추고, 범위가 화면보다 큰 장소만 필요한 만큼 물러난다. */
 function MapFlyTo({ place }: { place: Place | null }) {
   const map = useMap();
   useEffect(() => {
-    if (place) map.flyTo([place.lat, place.lng], 14, { duration: 0.9 });
+    if (!place) return;
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    const size = map.getSize();
+    // 모바일은 하단 패널이 아래 절반을 가리므로 위쪽 영역에 맞추고 마커도 위로 올린다.
+    const visible = L.point(size.x, mobile ? size.y * 0.45 : size.y);
+    const bounds = place.outline ? L.latLngBounds(place.outline.coords) : null;
+    const center = bounds ? bounds.getCenter() : L.latLng(place.lat, place.lng);
+
+    let zoom = FOCUS_ZOOM;
+    if (bounds) {
+      while (zoom > 12) {
+        const sw = map.project(bounds.getSouthWest(), zoom);
+        const ne = map.project(bounds.getNorthEast(), zoom);
+        if (Math.abs(ne.x - sw.x) + 64 <= visible.x && Math.abs(sw.y - ne.y) + 64 <= visible.y) break;
+        zoom -= 1;
+      }
+    }
+    const shift = mobile ? size.y * 0.22 : 0;
+    const target = map.unproject(map.project(center, zoom).add([0, shift]), zoom);
+    map.flyTo(target, zoom, { duration: 0.9 });
   }, [place, map]);
+  return null;
+}
+
+function MapDragCollapse({ onDragStart }: { onDragStart: () => void }) {
+  useMapEvents({ dragstart: onDragStart });
   return null;
 }
 
@@ -143,6 +170,9 @@ function MapControls() {
 }
 
 /* ---------- types ---------- */
+type SheetSnap = 'peek' | 'half' | 'full';
+const SHEET_PEEK_HEIGHT = 92;
+
 const emptyForm = {
   name: '', category: '관광명소' as Category,
   foodCategory: '한식' as FoodCategory,
@@ -163,6 +193,56 @@ export default function App() {
   const [form, setForm]                 = useState(emptyForm);
   const [formError, setFormError]       = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Place | null>(null);
+  const [sheetSnap, setSheetSnap]       = useState<SheetSnap>('half');
+  const [dragH, setDragH]               = useState<number | null>(null);
+  const [bodyH, setBodyH]               = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startY: number; startH: number; curH: number; moved: boolean } | null>(null);
+
+  useEffect(() => {
+    const update = () => setBodyH(bodyRef.current?.clientHeight ?? 0);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  const snapHeights: Record<SheetSnap, number> = {
+    peek: SHEET_PEEK_HEIGHT,
+    half: Math.round(bodyH * 0.45),
+    full: Math.round(bodyH * 0.88),
+  };
+  const sheetH = dragH ?? snapHeights[sheetSnap];
+  const sheetHidden = addMode || (!!selected && panelOpen);
+
+  function onHandleDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const startH = snapHeights[sheetSnap];
+    dragRef.current = { startY: e.clientY, startH, curH: startH, moved: false };
+  }
+  function onHandleMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dy = d.startY - e.clientY;
+    if (Math.abs(dy) > 4) d.moved = true;
+    if (!d.moved) return;
+    d.curH = Math.min(snapHeights.full, Math.max(snapHeights.peek, d.startH + dy));
+    setDragH(d.curH);
+  }
+  function onHandleUp() {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (!d.moved) {
+      setSheetSnap(s => (s === 'peek' ? 'half' : s === 'half' ? 'full' : 'peek'));
+    } else {
+      const flick = d.curH - d.startH;
+      const target = d.curH + Math.sign(flick) * 30; // small bias so a short flick still changes state
+      const nearest = (Object.keys(snapHeights) as SheetSnap[]).reduce((a, b) =>
+        Math.abs(snapHeights[a] - target) <= Math.abs(snapHeights[b] - target) ? a : b);
+      setSheetSnap(nearest);
+    }
+    setDragH(null);
+  }
 
   const allPlaces = [...defaultPlaces, ...customPlaces];
   const filtered  = allPlaces.filter(p =>
@@ -214,7 +294,7 @@ export default function App() {
   } as const;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, fontFamily: 'var(--font-sans)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: C.bg, fontFamily: 'var(--font-sans)' }}>
 
       {/* ── Header ── */}
       <header className="app-header" style={{
@@ -289,13 +369,21 @@ export default function App() {
       )}
 
       {/* ── Body ── */}
-      <div className={`map-body ${sidebarOpen ? 'sidebar-open' : ''}`} style={{ flex: 1, overflow: 'hidden' }}>
+      <div ref={bodyRef} className={`map-body ${sidebarOpen ? 'sidebar-open' : ''}`} style={{ flex: 1, overflow: 'hidden' }}>
 
         {/* ── Sidebar ── */}
-        <aside className={`sidebar-scroll place-sidebar ${sidebarOpen ? 'is-open' : ''}`} style={{
+        <aside className={`sidebar-scroll place-sidebar ${sidebarOpen ? 'is-open' : ''} ${sheetHidden ? 'is-hidden' : ''} ${dragH !== null ? 'is-dragging' : ''}`} style={{
           width: 256, flexShrink: 0, overflowY: 'auto',
           background: C.surface, borderRight: `1px solid ${C.border}`,
+          ['--sheet-h' as string]: `${sheetH}px`,
         }}>
+          <div className="sheet-handle"
+            onPointerDown={onHandleDown} onPointerMove={onHandleMove}
+            onPointerUp={onHandleUp} onPointerCancel={onHandleUp}
+            role="button" aria-label="장소 목록 높이 조절">
+            <span className="sheet-handle__bar" />
+            <span className="sheet-handle__count">{filtered.length}곳의 장소</span>
+          </div>
           <div style={{ padding: 12 }}>
             {filter === '맛집' && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '4px 4px 12px' }}>
@@ -311,7 +399,7 @@ export default function App() {
                 })}
               </div>
             )}
-            <p style={{ color: C.sub, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '4px 0 8px 4px' }}>
+            <p className="sheet-count-desktop" style={{ color: C.sub, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '4px 0 8px 4px' }}>
               {filtered.length}곳의 장소
             </p>
             {filtered.map(place => {
@@ -375,6 +463,7 @@ export default function App() {
             <MapViewport />
             <InitialYeosuFocus />
             <MapFlyTo place={selected} />
+            <MapDragCollapse onDragStart={() => setSheetSnap('peek')} />
             <MapClickHandler active={addMode && !showForm} onPick={handleMapPick} />
             {filtered.map(place => (
               <Marker key={place.id} position={[place.lat, place.lng]}
@@ -382,6 +471,18 @@ export default function App() {
                 eventHandlers={{ click: () => handleSelect(place) }}
               />
             ))}
+            {filtered.map(place => {
+              if (!place.outline) return null;
+              const active = selected?.id === place.id;
+              const pathOptions = {
+                className: 'neon-outline', color: NEON_COLOR, fillColor: NEON_COLOR,
+                weight: active ? 4 : 3, fillOpacity: active ? 0.3 : 0.14, opacity: active ? 1 : 0.9,
+              };
+              const eventHandlers = { click: () => handleSelect(place) };
+              return place.outline.kind === 'line'
+                ? <Polyline key={`outline-${place.id}-${active}`} positions={place.outline.coords} pathOptions={{ ...pathOptions, weight: active ? 6 : 4 }} eventHandlers={eventHandlers} />
+                : <Polygon key={`outline-${place.id}-${active}`} positions={place.outline.coords} pathOptions={pathOptions} eventHandlers={eventHandlers} />;
+            })}
             {pinLatLng && <Marker position={[pinLatLng.lat, pinLatLng.lng]} icon={createPinIcon()} />}
             <MapControls />
           </MapContainer>

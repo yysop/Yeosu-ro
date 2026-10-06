@@ -84,6 +84,10 @@ body {
   left: 266px;
 }
 
+.sheet-handle {
+  display: none;
+}
+
 .map-legend {
   transition: left 180ms ease;
 }
@@ -98,6 +102,12 @@ body {
 
 .leaflet-container {
   background: #d4e8f7 !important;
+}
+
+.neon-outline {
+  filter: drop-shadow(0 0 3px #39ff14) drop-shadow(0 0 9px rgba(57, 255, 20, 0.85));
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .star-marker {
@@ -196,20 +206,72 @@ body {
     flex: 0 0 auto;
   }
 
-  .place-sidebar {
-    width: min(86vw, 320px) !important;
+  /* Bottom sheet: the list sits under the map and is resized by dragging the handle. */
+  .place-sidebar,
+  .place-sidebar.is-open {
+    top: auto !important;
+    width: 100% !important;
+    height: var(--sheet-h, 92px);
+    transform: none;
+    border-right: 0 !important;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -6px 22px rgba(15, 34, 53, 0.16);
+    transition: height 220ms ease;
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior: contain;
   }
 
-  .sidebar-toggle.is-open {
-    left: calc(min(86vw, 320px) - 1px);
+  .place-sidebar.is-dragging {
+    transition: none;
+  }
+
+  .place-sidebar.is-hidden {
+    height: 0 !important;
+    box-shadow: none;
+    overflow: hidden !important;
+  }
+
+  .sheet-handle {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0;
+    background: #fff;
+    border-bottom: 1px solid var(--c-border);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .sheet-handle__bar {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: #c3d4e2;
+  }
+
+  .sheet-handle__count {
+    color: var(--c-sub);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .sheet-count-desktop,
+  .sidebar-toggle {
+    display: none !important;
   }
 
   .map-body.sidebar-open .map-legend {
     left: 14px !important;
   }
 
-  .map-legend {
-    top: 54px !important;
+  .map-body .map-legend,
+  .map-body:not(.sidebar-open) .map-legend {
+    top: 14px !important;
   }
 
   .info-panel,
@@ -222,6 +284,7 @@ body {
 
   .info-panel {
     bottom: 12px !important;
+    max-height: 50% !important;
   }
 
   .add-form-panel {
