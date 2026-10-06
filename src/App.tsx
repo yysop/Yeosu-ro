@@ -30,7 +30,10 @@ const FOOD_MARKER_COLORS: Record<FoodCategory, string> = {
 };
 
 function loadCustomPlaces(): Place[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+  try {
+    // 숙소 카테고리는 제거됐으므로 이전에 저장된 숙소 항목은 걸러낸다.
+    return (JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') as Place[]).filter(p => p.category === '관광명소' || p.category === '맛집');
+  } catch { return []; }
 }
 function saveCustomPlaces(p: Place[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
@@ -39,11 +42,11 @@ function saveCustomPlaces(p: Place[]) {
 /* ---------- icons ---------- */
 function getPlaceColor(category: Category, foodCategory?: FoodCategory) {
   if (category === '맛집') return FOOD_MARKER_COLORS[foodCategory ?? '한식'];
-  return category === '숙소' ? '#16a34a' : '#2563eb';
+  return '#2563eb';
 }
 
 function getPlaceColorLight(category: Category) {
-  return category === '맛집' ? '#fff1f2' : category === '숙소' ? '#f0fdf4' : '#eff6ff';
+  return category === '맛집' ? '#fff1f2' : '#eff6ff';
 }
 
 function createStarIcon(category: Category, foodCategory: FoodCategory | undefined, isActive: boolean, isCustom = false) {
@@ -286,8 +289,6 @@ export default function App() {
     blueLt:  '#e8f3fb',
     teal:    '#0d9488',
     tealLt:  '#e6faf8',
-    purple:  '#7c3aed',
-    purpleLt:'#f3e8ff',
     text:    '#0f2235',
     sub:     '#5b7a94',
     red:     '#d94f3d',
@@ -320,7 +321,7 @@ export default function App() {
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Filter tabs */}
           <div className="category-filters" style={{ display: 'flex', gap: 4, background: C.blueLt, borderRadius: 10, padding: 4 }}>
-            {(['all', '관광명소', '맛집', '숙소'] as const).map(f => {
+            {(['all', '관광명소', '맛집'] as const).map(f => {
               const active = filter === f;
               return (
                 <button key={f} onClick={() => { setFilter(f); setFoodFilter('all'); }} style={{
@@ -405,7 +406,6 @@ export default function App() {
             {filtered.map(place => {
               const active = selected?.id === place.id;
               const food   = place.category === '맛집';
-              const stay   = place.category === '숙소';
               const placeColor = getPlaceColor(place.category, place.foodCategory);
               return (
                 <button key={place.id} onClick={() => { setSelected(place); setPanelOpen(true); if (addMode) cancelAdd(); }}
@@ -423,7 +423,7 @@ export default function App() {
                       borderRadius: 7,
                       background: getPlaceColorLight(place.category),
                     }}>
-                      {food ? '🍽' : stay ? '🛏' : '📍'}
+                      {food ? '🍽' : '📍'}
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ color: C.text, fontSize: '0.83rem', fontWeight: active ? 600 : 400, lineHeight: 1.25 }}>
@@ -498,7 +498,6 @@ export default function App() {
             <p style={{ color: C.sub, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px' }}>범례</p>
             <LegendItem color="#dc2626" label="맛집" />
             <LegendItem color="#2563eb" label="관광명소" />
-            <LegendItem color="#16a34a" label="숙소" />
           </div>
 
           {/* Info panel */}
@@ -559,7 +558,6 @@ function InfoPanel({ place, isCustom, C, onClose, onDelete }: {
   place: Place; isCustom: boolean; C: any; onClose: () => void; onDelete: () => void;
 }) {
   const food = place.category === '맛집';
-  const stay = place.category === '숙소';
   const placeColor = getPlaceColor(place.category, place.foodCategory);
   return (
     <div className="sidebar-scroll info-panel" style={{
@@ -654,19 +652,18 @@ function AddFormPanel({ form, onChange, onSubmit, onCancel, onRepin, error, lat,
 
         <Field label="카테고리">
           <div style={{ display: 'flex', gap: 8 }}>
-            {(['관광명소', '맛집', '숙소'] as const).map(cat => {
+            {(['관광명소', '맛집'] as const).map(cat => {
               const on = form.category === cat;
               const food = cat === '맛집';
-              const stay = cat === '숙소';
               return (
                 <button key={cat} onClick={() => onChange('category', cat)} style={{
                   flex: 1, padding: '8px 0', borderRadius: 8, cursor: 'pointer',
                   fontSize: '0.82rem', fontWeight: 500, transition: 'all 0.13s', border: 'none',
-                  background: on ? (food ? C.blueLt : stay ? C.purpleLt : C.tealLt) : '#f4f7fa',
-                  color: on ? (food ? C.blue : stay ? C.purple : C.teal) : C.sub,
-                  outline: on ? `2px solid ${food ? C.blueMid : stay ? C.purple : C.teal}` : '2px solid transparent',
+                  background: on ? (food ? C.blueLt : C.tealLt) : '#f4f7fa',
+                  color: on ? (food ? C.blue : C.teal) : C.sub,
+                  outline: on ? `2px solid ${food ? C.blueMid : C.teal}` : '2px solid transparent',
                 }}>
-                  {food ? '🍽 맛집' : stay ? '🛏 숙소' : '📍 관광명소'}
+                  {food ? '🍽 맛집' : '📍 관광명소'}
                 </button>
               );
             })}

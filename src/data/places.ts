@@ -1,4 +1,4 @@
-export type Category = '맛집' | '관광명소' | '숙소';
+export type Category = '맛집' | '관광명소';
 export type FoodCategory = '한식' | '일식' | '양식' | '중식' | '회·해산물' | '카페' | '디저트';
 
 export interface Place {
@@ -137,30 +137,5 @@ export const places: Place[] = [
     url: 'https://yeosuexpo.kr',
     lat: 34.7487,
     lng: 127.7472,
-  },
-  // 숙소
-  {
-    id: 13,
-    name: '소노캄 여수',
-    category: '숙소',
-    description: '여수 엑스포역과 오동도 사이에 자리한 바다 전망 호텔. 주요 관광지와 가까워 도보와 차량 이동이 편리합니다.',
-    address: '전라남도 여수시 오동도로 111',
-    hours: '체크인 15:00 · 체크아웃 11:00',
-    tip: '바다 전망 객실은 일출과 야경을 함께 즐기기 좋습니다.',
-    url: 'https://www.sonohotelsresorts.com/yeosu',
-    lat: 34.7423,
-    lng: 127.7545,
-  },
-  {
-    id: 14,
-    name: '유탑 마리나 호텔 & 리조트',
-    category: '숙소',
-    description: '여수 신항을 내려다보는 호텔로, 여수 엑스포 해양공원과 낭만포차 거리 방문에 편리합니다.',
-    address: '전라남도 여수시 오동도로 61-15',
-    hours: '체크인 15:00 · 체크아웃 11:00',
-    tip: '루프톱과 인피니티 풀 운영 여부는 방문 전 확인하세요.',
-    url: 'https://www.utophotel.com/',
-    lat: 34.7444,
-    lng: 127.7508,
   },
 ];
